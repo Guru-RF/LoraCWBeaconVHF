@@ -8,6 +8,7 @@ from digitalio import DigitalInOut, Direction, Pull
 import adafruit_si5351
 import config
 import asyncio
+import adafruit_gps
 
 # User config
 WPM = config.WPM
@@ -16,14 +17,19 @@ BEACON = config.BEACON
 BEACONDELAY = config.BEACONDELAY
 
 # Create the I2C interface.
-XTAL_FREQ = 25000000
+XTAL_FREQ = 24000000
 i2c = busio.I2C(scl=board.GP27, sda=board.GP26)
 si5351 = adafruit_si5351.SI5351(i2c)
+
+# PA
+pa = digitalio.DigitalInOut(board.GP2)
+pa.direction = digitalio.Direction.OUTPUT
+pa.value = False
 
 # leds
 pwrLED = digitalio.DigitalInOut(board.GP9)
 pwrLED.direction = digitalio.Direction.OUTPUT
-pwrLED.value = True
+pwrLED.value = False
 
 txLED = digitalio.DigitalInOut(board.GP10)
 txLED.direction = digitalio.Direction.OUTPUT
@@ -49,6 +55,7 @@ def setFrequency(frequency):
     si5351.pll_a.configure_fractional(mult, num, denom)
     si5351.clock_0.configure_integer(si5351.pll_a, divider)	
 
+
 def led(what):
     if what=='tx':
         txLED.value = True
@@ -58,6 +65,7 @@ def led(what):
         loraLED.value = True
     if what=='loraOFF':
         loraLED.value = False
+
 
 # setup encode and decode
 encodings = {}
@@ -70,6 +78,7 @@ def encode(char):
     else:
         return ''
 
+
 decodings = {}
 def decode(char):
     global decodings
@@ -78,6 +87,7 @@ def decode(char):
     else:
         #return '('+char+'?)'
         return '¿'
+
 
 def MAP(pattern,letter):
     decodings[pattern] = letter
@@ -108,6 +118,7 @@ MAP('...-.-','|') # /SK end of contact
 MAP('...-.', '*') # /SN understood
 MAP('.......','#') # error
 
+
 # key down and up
 def cw(on):
     if on:
@@ -117,24 +128,30 @@ def cw(on):
         led('txOFF')
         si5351.outputs_enabled = False
 
+
 # timing
 def dit_time():
     global WPM
     PARIS = 50 
     return 60.0 / WPM / PARIS
 
+
 # transmit pattern
 def play(pattern):
     for sound in pattern:
         if sound == '.':
+            pa.value = True
             cw(True)
             time.sleep(dit_time())
             cw(False)
+            pa.value = False
             time.sleep(dit_time())
         elif sound == '-':
+            pa.value = True
             cw(True)
             time.sleep(3*dit_time())
             cw(False)
+            pa.value = False
             time.sleep(dit_time())
         elif sound == ' ':
             time.sleep(4*dit_time())
@@ -176,10 +193,36 @@ async def beaconLoop():
 
 
 async def main():
-   #loop = asyncio.get_event_loop()
-   #loraL = asyncio.create_task(loraLoop())
-   cwL = asyncio.create_task(beaconLoop())
-   await asyncio.gather(cwL)
+    # GPS Module (uart)
+    uart = busio.UART(board.GP4, board.GP5, baudrate=9600, timeout=10, receiver_buffer_size=1024)
+    gps = adafruit_gps.GPS(uart, debug=False) 
+
+    # Set GPS pps to always (without lock) to 24Mhz
+    Speed = bytes ([
+        0xB5, 0x62, 0x06, 0x31, 0x20, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x36, 0x6E, 0x01, 0x00, 0x36,
+    0x6E, 0x01, 0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x6F, 0x00, 0x00, 0x00, 0x11, 0xD8,
+    ])
+    gps.send_command(Speed)
+    time.sleep(0.1)
+
+    while not gps.has_fix:
+        pwrLED.value = True
+        time.sleep(0.5)
+        try:
+            gps.update()
+        except MemoryError:
+            # the gps module has a nasty memory leak just ignore and reload (Gps trackings stays in tact)
+            supervisor.reload()
+
+        pwrLED.value = False
+        time.sleep(0.5)
+
+    pwrLED.value = True
+
+    #loop = asyncio.get_event_loop()
+    #loraL = asyncio.create_task(loraLoop())
+    cwL = asyncio.create_task(beaconLoop())
+    await asyncio.gather(cwL)
 
 
 asyncio.run(main()) 
