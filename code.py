@@ -9,6 +9,7 @@ import adafruit_si5351
 import config
 import asyncio
 import adafruit_gps
+import adafruit_rfm9x
 
 # User config
 WPM = config.WPM
@@ -218,6 +219,16 @@ async def main():
         time.sleep(0.5)
 
     pwrLED.value = True
+
+    # LoRa APRS frequency
+    RADIO_FREQ_MHZ = 433.775
+    CS = digitalio.DigitalInOut(board.GP21)
+    RESET = digitalio.DigitalInOut(board.GP20)
+    spi = busio.SPI(board.GP18, MOSI=board.GP19, MISO=board.GP16)
+
+    # Lora Module
+    rfm9x = adafruit_rfm9x.RFM9x(spi, CS, RESET, RADIO_FREQ_MHZ, baudrate=1000000)
+    rfm9x.tx_power = config.LORAPOWER # 5 min 23 max
 
     #loop = asyncio.get_event_loop()
     #loraL = asyncio.create_task(loraLoop())
