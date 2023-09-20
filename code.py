@@ -20,12 +20,16 @@ BEACONDELAY = config.BEACONDELAY
 # Create the I2C interface.
 XTAL_FREQ = 24000000
 i2c = busio.I2C(scl=board.GP27, sda=board.GP26)
-si5351 = adafruit_si5351.SI5351(i2c)
 
 # PA
 pa = digitalio.DigitalInOut(board.GP2)
 pa.direction = digitalio.Direction.OUTPUT
 pa.value = False
+
+# OSC
+osc = digitalio.DigitalInOut(board.GP3)
+osc.direction = digitalio.Direction.OUTPUT
+osc.value = False
 
 # leds
 pwrLED = digitalio.DigitalInOut(board.GP9)
@@ -40,8 +44,7 @@ loraLED = digitalio.DigitalInOut(board.GP11)
 loraLED.direction = digitalio.Direction.OUTPUT
 loraLED.value = False
 
-
-def setFrequency(frequency):
+def setFrequency(frequency, si5351):
     xtalFreq = XTAL_FREQ
     divider = int(900000000 / frequency)
     if (divider % 2): divider -= 1
@@ -55,17 +58,6 @@ def setFrequency(frequency):
     denom = 1048575
     si5351.pll_a.configure_fractional(mult, num, denom)
     si5351.clock_0.configure_integer(si5351.pll_a, divider)	
-
-
-def led(what):
-    if what=='tx':
-        txLED.value = True
-    if what=='txOFF':
-        txLED.value = False
-    if what=='lora':
-        loraLED.value = True
-    if what=='loraOFF':
-        loraLED.value = False
 
 
 # setup encode and decode
@@ -120,58 +112,16 @@ MAP('...-.', '*') # /SN understood
 MAP('.......','#') # error
 
 
-# key down and up
-def cw(on):
-    if on:
-        led('tx')
-        si5351.outputs_enabled = True
-    else:
-        led('txOFF')
-        si5351.outputs_enabled = False
-
-
 # timing
 def dit_time():
     global WPM
     PARIS = 50 
     return 60.0 / WPM / PARIS
 
-
-# transmit pattern
-def play(pattern):
-    for sound in pattern:
-        if sound == '.':
-            pa.value = True
-            cw(True)
-            time.sleep(dit_time())
-            cw(False)
-            pa.value = False
-            time.sleep(dit_time())
-        elif sound == '-':
-            pa.value = True
-            cw(True)
-            time.sleep(3*dit_time())
-            cw(False)
-            pa.value = False
-            time.sleep(dit_time())
-        elif sound == ' ':
-            time.sleep(4*dit_time())
-    time.sleep(2*dit_time())
-
-# play beacon and pause            
-def beacon():
-    global cwBeacon
-    letter = cwBeacon[:1]
-    cwBeacon = cwBeacon[1:]
-    print(letter, end="")
-    play(encode(letter))
-
-
 async def loraLoop():
     while True:
         await asyncio.sleep(10)
         print("test")
-
 
 async def beaconLoop():
     global cwBeacon
@@ -179,18 +129,50 @@ async def beaconLoop():
     global FREQ
     delay = " " * BEACONDELAY
     cwBeacon = BEACON + delay
-    setFrequency(FREQ*1000)
-    print('Measured Frequency: {0:0.3f} MHz'.format(si5351.clock_0.frequency/1000000))
     while True:
-        beacon() 
+        # Turn on the variable osc
+        #osc.value = True
+        await asyncio.sleep(3)
+        si5351 = adafruit_si5351.SI5351(i2c)
+        await asyncio.sleep(1)
+        setFrequency((FREQ*1000), si5351)
+        print('Measured Frequency: {0:0.3f} MHz'.format(si5351.clock_0.frequency/1000000))
+        si5351.outputs_enabled = True
+        await asyncio.sleep(1)
+
+        pa.value = True
+        await asyncio.sleep(1)
+        while len(cwBeacon) is not 0:
+            letter = cwBeacon[:1]
+            cwBeacon = cwBeacon[1:]
+            print(letter, end="")
+
+            for sound in encode(letter):
+                if sound == '.':
+                    si5351.outputs_enabled = True
+                    txLED.value = True
+                    await asyncio.sleep(dit_time())
+                    txLED.value = False
+                    si5351.outputs_enabled = False
+                    await asyncio.sleep(dit_time())
+                elif sound == '-':
+                    si5351.outputs_enabled = True
+                    txLED.value = True
+                    await asyncio.sleep(dit_time())
+                    await asyncio.sleep(3*dit_time())
+                    si5351.outputs_enabled = False
+                    txLED.value = False
+                    await asyncio.sleep(dit_time())
+                elif sound == ' ':
+                    await asyncio.sleep(4*dit_time())
+            await asyncio.sleep(2*dit_time())
+        pa.value = False
+
+        #osc.value = False
+        delay = " " * BEACONDELAY
+        cwBeacon = BEACON + delay
+        print()
         await asyncio.sleep(0)
-        if len(cwBeacon) is 0:
-            delay = " " * BEACONDELAY
-            cwBeacon = BEACON + delay
-            print()
-            setFrequency(FREQ*1000)
-            print('Measured Frequency: {0:0.3f} MHz'.format(si5351.clock_0.frequency/1000000))
-            await asyncio.sleep(0)
 
 
 async def main():
@@ -200,13 +182,14 @@ async def main():
 
     # Set GPS pps to always (without lock) to 24Mhz
     Speed = bytes ([
-        0xB5, 0x62, 0x06, 0x31, 0x20, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x36, 0x6E, 0x01, 0x00, 0x36,
-    0x6E, 0x01, 0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x6F, 0x00, 0x00, 0x00, 0x11, 0xD8,
+        0xB5, 0x62, 0x06, 0x31, 0x20, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x36, 0x6E, 0x01,
+  0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x6F, 0x00, 0x00, 0x00, 0x6D, 0x8D,
     ])
     gps.send_command(Speed)
     time.sleep(0.1)
 
-    while not gps.has_fix:
+    # Wait for PPS fix
+    while not gps.fix_quality is 2:
         pwrLED.value = True
         time.sleep(0.5)
         try:
@@ -217,8 +200,13 @@ async def main():
 
         pwrLED.value = False
         time.sleep(0.5)
+        print(gps.fix_quality)
 
     pwrLED.value = True
+        
+    osc.value = True
+        
+    time.sleep(0.5)
 
     # LoRa APRS frequency
     RADIO_FREQ_MHZ = 433.775
