@@ -31,8 +31,7 @@ __repo__ = "https://github.com/adafruit/Adafruit_CircuitPython_SI5351.git"
 # Internal constants:
 _SI5351_ADDRESS = const(0x60)  # Assumes ADDR pin = low
 _SI5351_READBIT = const(0x01)
-#_SI5351_CRYSTAL_FREQUENCY = 23999688.0  # Fixed 25mhz crystal on board.
-_SI5351_CRYSTAL_FREQUENCY = 24000000.0  # Fixed 25mhz crystal on board.
+_SI5351_CRYSTAL_FREQUENCY = 25000000.0  # Fixed 25mhz crystal on board.
 _SI5351_REGISTER_0_DEVICE_STATUS = const(0)
 _SI5351_REGISTER_1_INTERRUPT_STATUS_STICKY = const(1)
 _SI5351_REGISTER_2_INTERRUPT_STATUS_MASK = const(2)
