@@ -139,8 +139,8 @@ si5351 = adafruit_si5351.SI5351(i2c)
 
 
 while True:
-    pa.value = True
     extpa.value = True
+    pa.value = True
     time.sleep(1)
     setFrequency(((FREQ+OFFSET)*1000), si5351)
     print('Measured Frequency: {0:0.3f} MHz'.format(si5351.clock_0.frequency/1000000))
@@ -151,28 +151,25 @@ while True:
 
         for sound in encode(letter):
             if sound == '.':
-                pa.value = True
                 si5351.outputs_enabled = True
                 txLED.value = True
                 time.sleep(dit_time())
                 txLED.value = False
                 si5351.outputs_enabled = False
-                pa.value = False
                 time.sleep(dit_time())
             elif sound == '-':
-                pa.value = True
                 si5351.outputs_enabled = True
                 txLED.value = True
                 time.sleep(dit_time())
                 time.sleep(3*dit_time())
                 si5351.outputs_enabled = False
                 txLED.value = False
-                pa.value = False
                 time.sleep(dit_time())
             elif sound == ' ':
                 time.sleep(4*dit_time())
         time.sleep(2*dit_time())
 
+    pa.value = False
     extpa.value = False
 
     #osc.value = False
