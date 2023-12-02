@@ -141,9 +141,13 @@ si5351 = adafruit_si5351.SI5351(i2c)
 while True:
     extpa.value = True
     pa.value = True
-    time.sleep(1)
     setFrequency(((FREQ+OFFSET)*1000), si5351)
     print('Measured Frequency: {0:0.3f} MHz'.format(si5351.clock_0.frequency/1000000))
+    print('Key down for 15secs')
+    si5351.outputs_enabled = True
+    time.sleep(15)
+    si5351.outputs_enabled = False
+    time.sleep(1)
     while len(cwBeacon) is not 0:
         letter = cwBeacon[:1]
         cwBeacon = cwBeacon[1:]
