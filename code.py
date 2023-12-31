@@ -12,6 +12,7 @@ import config
 WPM = config.WPM
 FREQ = config.FREQ
 OFFSET = config.OFFSET
+FSKOFFSET = config.FSKOFFSET
 BEACON = config.BEACON
 BEACONDELAY = config.BEACONDELAY
 
@@ -121,24 +122,7 @@ def dit_time():
     PARIS = 50 
     return 60.0 / WPM / PARIS
 
-
-pwrLED.value = True
-    
-osc.value = True
-    
-time.sleep(0.5)
-
-delay = " " * BEACONDELAY
-cwBeacon = BEACON + delay
-    
-# Turn on the variable osc
-#osc.value = True
-si5351 = adafruit_si5351.SI5351(i2c)
-#si5351.outputs_enabled = True
-#time.sleep(2)
-
-
-while True:
+def CW(si5351,cwBeacon):
     extpa.value = True
     pa.value = True
     setFrequency(((FREQ+OFFSET)*1000), si5351)
@@ -172,11 +156,59 @@ while True:
             elif sound == ' ':
                 time.sleep(4*dit_time())
         time.sleep(2*dit_time())
-
-    pa.value = False
     extpa.value = False
+    pa.value = False
+    print('Pause for 15secs')
+    time.sleep(15)
 
-    #osc.value = False
-    delay = " " * BEACONDELAY
-    cwBeacon = BEACON + delay
-    print()
+def FSKCW(si5351,cwBeacon):
+    extpa.value = True
+    pa.value = True
+    setFrequency(((FREQ+OFFSET)*1000), si5351)
+    print('Measured Frequency: {0:0.3f} MHz'.format(si5351.clock_0.frequency/1000000))
+    print('Key down for 15secs')
+    si5351.outputs_enabled = True
+    time.sleep(15)
+    while len(cwBeacon) is not 0:
+        letter = cwBeacon[:1]
+        cwBeacon = cwBeacon[1:]
+        print(letter, end="")
+
+        for sound in encode(letter):
+            if sound == '.':
+                setFrequency(((FREQ+OFFSET)*1000), si5351)
+                txLED.value = True
+                time.sleep(dit_time())
+                txLED.value = False
+                setFrequency(((FREQ+OFFSET-FSKOFFSET)*1000), si5351)
+                time.sleep(dit_time())
+            elif sound == '-':
+                setFrequency(((FREQ+OFFSET)*1000), si5351)
+                txLED.value = True
+                time.sleep(dit_time())
+                time.sleep(3*dit_time())
+                txLED.value = False
+                setFrequency(((FREQ+OFFSET-FSKOFFSET)*1000), si5351)
+                time.sleep(dit_time())
+            elif sound == ' ':
+                setFrequency(((FREQ+OFFSET-FSKOFFSET)*1000), si5351)
+                time.sleep(4*dit_time())
+        setFrequency(((FREQ+OFFSET-FSKOFFSET)*1000), si5351)
+        time.sleep(2*dit_time())
+    extpa.value = False
+    pa.value = False
+    print('Pause for 15secs')
+    time.sleep(15)
+
+pwrLED.value = True
+osc.value = True
+time.sleep(0.5)
+delay = " " * BEACONDELAY
+cwBeacon = BEACON + delay
+si5351 = adafruit_si5351.SI5351(i2c)
+
+while True:
+    print("CW Mode")
+    CW(si5351,cwBeacon)
+    #print("FSKCW Mode")
+    #FSKCW(si5351,cwBeacon)
