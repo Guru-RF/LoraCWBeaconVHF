@@ -342,6 +342,7 @@ class SI5351:
             p3 = 1
             self._configure_registers(p1, p2, p3)
             # Configure the clock control register.
+            #control = 0x0E  # 6mA drive strength, MS0 as CLK0 source,
             control = 0x0F  # 8mA drive strength, MS0 as CLK0 source,
             # Clock not inverted, powered up
             control |= pll.clock_control_enabled
